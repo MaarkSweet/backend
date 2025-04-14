@@ -6,7 +6,7 @@ const PORT = process.env.PORT || 3009;
 const app = express();
 const pool = new Pool({
     user: 'porstgres_user',
-    host: 'localhost',
+    host: 'dpg-cvupamvgi27c739c0h3g-a.oregon-postgres.render.com',
     database: 'postgres',
     password: 'MRQRB0hhmav0BK9oYYASOgNl0c4MskLw',
     port: 5432,
