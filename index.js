@@ -5,10 +5,10 @@ const PORT = process.env.PORT || 3009;
 
 const app = express();
 const pool = new Pool({
-    user: 'postgres',
+    user: 'porstgres_user',
     host: 'localhost',
     database: 'postgres',
-    password: '1234',
+    password: 'MRQRB0hhmav0BK9oYYASOgNl0c4MskLw',
     port: 5432,
 });
 
