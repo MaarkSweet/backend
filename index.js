@@ -13,7 +13,7 @@ const pool = new Pool({
 });
 
 app.use(cors({
-    origin: 'https://rainbow-lake.vercel.app/',
+    origin: 'https://rainbow-lake.vercel.app',
     methods: ['POST', 'GET', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true
