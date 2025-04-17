@@ -12,12 +12,7 @@ const pool = new Pool({
     port: 5432,
 });
 
-app.use(cors({
-    origin: 'https://rainbow-lake.vercel.app',
-    methods: ['POST', 'GET', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true
-}));
+app.use(cors());
 app.use(express.json());
 
 
