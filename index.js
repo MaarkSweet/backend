@@ -15,16 +15,46 @@ const pool = new Pool({
 app.use(cors());
 app.use(express.json());
 
-
 app.get('/api/catalog', async (req, res) => {
     try {
-        const searchQuery = req.query.q;
-        let query = 'SELECT * FROM catalog';
-        let params = [];
 
-        if (searchQuery) {
-            query = 'SELECT * FROM catalog WHERE product_name ILIKE $1';
-            params = [`%${searchQuery}%`];
+        let query = 'SELECT * FROM catalog WHERE 1=1';
+        const params = [];
+        let paramIndex = 1;
+
+        if (q) {
+            query += ` AND product_name ILIKE $${paramIndex}`;
+            params.push(`%${q}%`);
+            paramIndex++;
+        }
+
+        if (category) {
+            query += ` AND category = $${paramIndex}`;
+            params.push(category);
+            paramIndex++;
+        }
+
+        if (minPrice) {
+            query += ` AND price >= $${paramIndex}`;
+            params.push(minPrice);
+            paramIndex++;
+        }
+
+        if (maxPrice) {
+            query += ` AND price <= $${paramIndex}`;
+            params.push(maxPrice);
+            paramIndex++;
+        }
+
+        const manufacturerFilter = manufacturer || manufacturerSearch;
+        if (manufacturerFilter) {
+            query += ` AND manufacturer ILIKE $${paramIndex}`;
+            params.push(`%${manufacturerFilter}%`);
+            paramIndex++;
+        }
+
+        if (inStock === 'true') {
+            query += ` AND in_stock = true`;
         }
 
         const result = await pool.query(query, params);
@@ -32,6 +62,70 @@ app.get('/api/catalog', async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+app.get('/api/categories', async (req, res) => {
+    try {
+        const result = await pool.query(`SELECT name FROM Categories ORDER BY name`);
+        res.json(result.rows.map(row => row.name));
+    } catch (error) {
+        console.error('Error fetching categories:', error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+app.post('/admin/categories', async (req, res) => {
+    const { name } = req.body;
+    try {
+        await pool.query(`INSERT INTO Categories (name) VALUES ($1)`, [name]);
+        res.sendStatus(201);
+    } catch (error) {
+        console.error('Error adding category:', error);
+        res.status(400).json({ error: "Ошибка при добавлении категории" });
+    }
+});
+
+app.delete('/admin/categories/:name', async (req, res) => {
+    const { name } = req.params;
+    try {
+        await pool.query(`DELETE FROM Categories WHERE name = $1`, [name]);
+        res.sendStatus(204);
+    } catch (error) {
+        console.error('Error deleting category:', error);
+        res.status(400).json({ error: "Ошибка при удалении категории" });
+    }
+});
+
+app.get('/api/manufacturers', async (req, res) => {
+    try {
+        const result = await pool.query(`SELECT name FROM Manufacturers ORDER BY name`);
+        res.json(result.rows.map(row => row.name));
+    } catch (error) {
+        console.error('Error fetching manufacturers:', error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+app.post('/admin/manufacturers', async (req, res) => {
+    const { name } = req.body;
+    try {
+        await pool.query(`INSERT INTO Manufacturers (name) VALUES ($1)`, [name]);
+        res.sendStatus(201);
+    } catch (error) {
+        console.error('Error adding manufacturer:', error);
+        res.status(400).json({ error: "Ошибка при добавлении производителя" });
+    }
+});
+
+app.delete('/admin/manufacturers/:name', async (req, res) => {
+    const { name } = req.params;
+    try {
+        await pool.query(`DELETE FROM Manufacturers WHERE name = $1`, [name]);
+        res.sendStatus(204);
+    } catch (error) {
+        console.error('Error deleting manufacturer:', error);
+        res.status(400).json({ error: "Ошибка при удалении производителя" });
     }
 });
 
@@ -101,6 +195,27 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
+app.get('/admin/users', async (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+    
+    const credentials = Buffer.from(authHeader.split(' ')[1], 'base64').toString('ascii');
+    const [username, password] = credentials.split(':');
+    
+    if (username !== 'admin' || password !== 'admin') {
+        return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    try {
+        const result = await pool.query(
+            'SELECT id, first_name, last_name, email, delivery_address FROM "User"'
+        );
+        res.json(result.rows);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
 
 app.post('/api/change-password', async (req, res) => {
     const { email, oldPassword, newPassword } = req.body;
@@ -226,7 +341,6 @@ app.delete('/api/cart/remove/:cart_id', async (req, res) => {
     }
 });
 
-
 const adminAuth = (req, res, next) => {
     const authHeader = req.headers.authorization;
 
@@ -265,7 +379,6 @@ app.post('/admin/products', adminAuth, async (req, res) => {
     }
 });
 
-
 app.delete('/admin/products/:id', adminAuth, async (req, res) => {
     try {
         const { id } = req.params;
@@ -299,7 +412,6 @@ app.put('/api/update-address', async (req, res) => {
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
-
 
 app.post('/api/add-favorite', async (req, res) => {
     const { userId, product } = req.body;
@@ -371,6 +483,101 @@ app.put('/api/favorites/remove', async (req, res) => {
     }
 });
 
+app.post('/api/orders', async (req, res) => {
+    try {
+        const { user_id, items, total } = req.body;
+        
+        const orderResult = await pool.query(
+            'INSERT INTO orders (user_id, items, total) VALUES ($1, $2, $3) RETURNING *',
+            [user_id, JSON.stringify(items), total]
+        );
+
+        const orderId = orderResult.rows[0].id;
+        for (const item of items) {
+            await pool.query(
+                'INSERT INTO order_items (order_id, product_id, quantity) VALUES ($1, $2, $3)',
+                [orderId, item.product_id, item.quantity]
+            );
+        }
+
+        res.status(201).json(orderResult.rows[0]);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+app.get('/admin/orders', async (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+    
+    const credentials = Buffer.from(authHeader.split(' ')[1], 'base64').toString('ascii');
+    const [username, password] = credentials.split(':');
+    
+    if (username !== 'admin' || password !== 'admin') {
+        return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    try {
+        const result = await pool.query(`
+            SELECT 
+                o.*, 
+                u.first_name, 
+                u.last_name, 
+                u.email,
+                jsonb_agg(jsonb_build_object(
+                    'product_id', oi.product_id,
+                    'product_name', c.product_name,
+                    'quantity', oi.quantity,
+                    'price', c.price
+                )) as items
+            FROM orders o
+            JOIN "User" u ON o.user_id = u.id
+            JOIN order_items oi ON o.id = oi.order_id
+            JOIN catalog c ON oi.product_id = c.id
+            GROUP BY o.id, u.id
+            ORDER BY o.created_at DESC
+        `);
+        
+        res.json(result.rows);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.get('/api/products/new', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT * FROM catalog 
+            WHERE created_at >= NOW() - INTERVAL '14 days'
+            ORDER BY created_at DESC
+            LIMIT 20
+        `);
+        res.json(result.rows);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+app.get('/api/products/top-sellers', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT 
+                c.*,
+                (SELECT COUNT(*) FROM order_items WHERE product_id = c.id) AS total_orders
+            FROM catalog c
+            WHERE (SELECT COUNT(*) FROM order_items WHERE product_id = c.id) >= 3
+            ORDER BY total_orders DESC
+            LIMIT 20
+        `);
+        res.json(result.rows);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
 
 app.listen(PORT, () => {
     console.log(`Server starting on port ${PORT}`);
