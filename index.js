@@ -17,6 +17,7 @@ app.use(express.json());
 
 app.get('/api/catalog', async (req, res) => {
     try {
+        const { q, category, minPrice, maxPrice, manufacturer, manufacturerSearch, inStock } = req.query;
 
         let query = 'SELECT * FROM catalog WHERE 1=1';
         const params = [];
