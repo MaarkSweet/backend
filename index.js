@@ -489,8 +489,8 @@ app.post('/api/orders', async (req, res) => {
         const { user_id, items, total } = req.body;
         
         const orderResult = await pool.query(
-            'INSERT INTO orders (user_id, items, total) VALUES ($1, $2, $3) RETURNING *',
-            [user_id, JSON.stringify(items), total]
+            'INSERT INTO orders (user_id, items, total, status) VALUES ($1, $2, $3, $4) RETURNING *',
+            [user_id, JSON.stringify(items), total, 'pending'] 
         );
 
         const orderId = orderResult.rows[0].id;
@@ -577,6 +577,54 @@ app.get('/api/products/top-sellers', async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
+app.put('/admin/orders/:id/accept', async (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'Unauthorized' });
+    
+    const credentials = Buffer.from(authHeader.split(' ')[1], 'base64').toString('ascii');
+    const [username, password] = credentials.split(':');
+    
+    if (username !== 'admin' || password !== 'admin') {
+        return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    try {
+        const { id } = req.params;
+        const result = await pool.query(
+            'UPDATE orders SET status = $1 WHERE id = $2 RETURNING *',
+            ['accepted', id]
+        );
+        
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Order not found' });
+        }
+        
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.put('/admin/orders/:id/reject', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await pool.query(
+            'UPDATE orders SET status = $1 WHERE id = $2 RETURNING *',
+            ['rejected', id]
+        );
+        
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Order not found' });
+        }
+        
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Internal Server Error' });
     }
 });
 
