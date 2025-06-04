@@ -8,7 +8,7 @@ const pool = new Pool({
     user: 'postgresql_rainbow_user',
     host: 'dpg-d00gtlhr0fns73e9bi0g-a',
     database: 'postgresql_rainbow',
-    password: 'dpg-d10av3a4d50c73ak3deg-a',
+    password: 'gaL9GNAhg3fbZr4j3x8NMJFkxqksDiu4',
     port: 5432,
 });
 
